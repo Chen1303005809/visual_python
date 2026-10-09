@@ -1,0 +1,78 @@
+services:
+  sandbox-image:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: sandbox
+    image: python-code-sandbox:3.12
+    command: ["python", "-c", "print('sandbox image ready')"]
+    restart: "no"
+    networks:
+      - runner-private
+
+  sandbox-runner:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runner
+    environment:
+      RUNNER_SHARED_TOKEN: ${RUNNER_SHARED_TOKEN:?Set RUNNER_SHARED_TOKEN in .env}
+      SANDBOX_IMAGE: python-code-sandbox:3.12
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-30}
+      CHECK_TIMEOUT_SECONDS: ${CHECK_TIMEOUT_SECONDS:-10}
+      MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-2}
+    volumes:
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+    depends_on:
+      sandbox-image:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - runner-private
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/internal/healthz', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  python-tools-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+    environment:
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      RUNNER_SHARED_TOKEN: ${RUNNER_SHARED_TOKEN:?Set RUNNER_SHARED_TOKEN in .env}
+      RUNNER_URL: http://sandbox-runner:9000
+      RUNNER_HTTP_TIMEOUT_SECONDS: ${RUNNER_HTTP_TIMEOUT_SECONDS:-50}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      sandbox-runner:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - runner-private
+      - dify
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  runner-private:
+    internal: true
+  dify:
+    external: true
+    name: ${DIFY_DOCKER_NETWORK:-dify_default}

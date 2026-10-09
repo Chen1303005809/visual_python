@@ -1,0 +1,225 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Dify Python 静态检查工具",
+    "version": "1.0.0",
+    "description": "检查 Python 3.12 语法、Ruff 诊断和模块可用性，不执行提交的源码。"
+  },
+  "servers": [
+    {
+      "url": "http://python-tools-api:8000",
+      "description": "Dify 与工具 API 所在的 Docker 网络"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/python/check": {
+      "post": {
+        "operationId": "python_static_check",
+        "summary": "检查 Python 源码",
+        "description": "检查语法、Ruff 静态诊断以及导入模块是否存在于固定 Python 3.12 执行镜像中。不会执行提交的源码。若有错误，请修复后再次调用。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "静态检查结果。status 为 passed 表示没有语法、lint 或导入错误。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    },
+    "schemas": {
+      "CodeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "完整的单个 Python 3.12 源码文件内容。UTF-8 输入总大小上限为 256 KiB。"
+          }
+        }
+      },
+      "Diagnostic": {
+        "type": "object",
+        "required": [
+          "source",
+          "code",
+          "message",
+          "severity"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "syntax",
+              "ruff",
+              "imports",
+              "checker"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ]
+          },
+          "line": {
+            "type": "integer",
+            "nullable": true
+          },
+          "column": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "CheckResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "syntax_valid",
+          "python_version",
+          "diagnostics",
+          "checked_imports"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "error"
+            ]
+          },
+          "syntax_valid": {
+            "type": "boolean"
+          },
+          "python_version": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Diagnostic"
+            }
+          },
+          "checked_imports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "API Key 缺失或无效。",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "RequestTooLarge": {
+        "description": "请求体超过 1 MiB 传输限制。",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "请求字段缺失、格式无效或源码超过 256 KiB 限制。"
+      },
+      "TooManyRequests": {
+        "description": "并发执行槽位已满，请稍后重试。",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "执行器不可用或沙箱镜像尚未构建。",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  }
+}

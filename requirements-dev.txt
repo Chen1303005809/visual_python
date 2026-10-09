@@ -1,0 +1,4 @@
+-r requirements-api.txt
+-r requirements-runner.txt
+pytest==9.1.1
+ruff==0.16.10

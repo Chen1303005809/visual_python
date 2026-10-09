@@ -46,19 +46,19 @@ services:
       dockerfile: docker/Dockerfile
       target: api
     environment:
-      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:8000}
       RUNNER_SHARED_TOKEN: ${RUNNER_SHARED_TOKEN:?Set RUNNER_SHARED_TOKEN in .env}
       RUNNER_URL: http://sandbox-runner:9000
       RUNNER_HTTP_TIMEOUT_SECONDS: ${RUNNER_HTTP_TIMEOUT_SECONDS:-50}
     ports:
-      - "127.0.0.1:${API_PORT:-8000}:8000"
+      - "0.0.0.0:${API_PORT:-8000}:8000"
     depends_on:
       sandbox-runner:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - runner-private
-      - dify
+      - api-ingress
     healthcheck:
       test:
         - CMD
@@ -73,6 +73,5 @@ services:
 networks:
   runner-private:
     internal: true
-  dify:
-    external: true
-    name: ${DIFY_DOCKER_NETWORK:-dify_default}
+  api-ingress:
+    driver: bridge

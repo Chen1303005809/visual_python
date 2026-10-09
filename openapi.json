@@ -3,17 +3,12 @@
   "info": {
     "title": "Dify Python Code Validator",
     "version": "1.0.0",
-    "description": "检查 Python 3.12 代码并在一次性隔离容器中运行 Agent 提供的 pytest 断言。"
+    "description": "检查 Python 3.12 代码并在一次性隔离容器中运行 Agent 提供的 pytest 断言。 API 无需 Bearer API Key。"
   },
   "servers": [
     {
-      "url": "http://python-tools-api:8000",
-      "description": "Dify 与工具 API 所在的 Docker 网络"
-    }
-  ],
-  "security": [
-    {
-      "BearerAuth": []
+      "url": "http://localhost:8000",
+      "description": "请替换为 Dify 可访问的 API_PUBLIC_URL。"
     }
   ],
   "paths": {
@@ -42,9 +37,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
           },
           "413": {
             "$ref": "#/components/responses/RequestTooLarge"
@@ -87,9 +79,6 @@
               }
             }
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
           "413": {
             "$ref": "#/components/responses/RequestTooLarge"
           },
@@ -107,13 +96,6 @@
     }
   },
   "components": {
-    "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "API Key"
-      }
-    },
     "schemas": {
       "CodeRequest": {
         "type": "object",
@@ -301,16 +283,6 @@
       }
     },
     "responses": {
-      "Unauthorized": {
-        "description": "API Key 缺失或无效。",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
-            }
-          }
-        }
-      },
       "RequestTooLarge": {
         "description": "请求体超过 1 MiB 传输限制。",
         "content": {

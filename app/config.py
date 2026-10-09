@@ -21,7 +21,7 @@ def _int_env(name: str, default: int, *, minimum: int, maximum: int) -> int:
 
 @dataclass(slots=True)
 class Settings:
-    api_key: str | None
+    api_public_url: str
     runner_url: str
     runner_shared_token: str | None
     runner_timeout_seconds: int
@@ -29,7 +29,7 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         return cls(
-            api_key=os.getenv("API_KEY"),
+            api_public_url=os.getenv("API_PUBLIC_URL", "http://localhost:8000").rstrip("/"),
             runner_url=os.getenv("RUNNER_URL", "http://sandbox-runner:9000").rstrip("/"),
             runner_shared_token=os.getenv("RUNNER_SHARED_TOKEN"),
             runner_timeout_seconds=_int_env(

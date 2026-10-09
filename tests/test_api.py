@@ -34,26 +34,18 @@ class FakeRunnerClient:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("API_PUBLIC_URL", "http://tools.example:8000")
     monkeypatch.setenv("RUNNER_SHARED_TOKEN", "test-runner-token")
     with TestClient(app) as test_client:
         app.state.runner_client = FakeRunnerClient()
         yield test_client
 
 
-def test_tools_require_bearer_api_key(client: TestClient) -> None:
-    response = client.post("/v1/python/check", json={"source": "answer = 42"})
-
-    assert response.status_code == 401
-
-
-def test_check_and_test_tool_calls_return_structured_results(client: TestClient) -> None:
-    headers = {"Authorization": "Bearer test-api-key"}
-    check = client.post("/v1/python/check", json={"source": "answer = 42"}, headers=headers)
+def test_check_and_test_tool_calls_work_without_api_key(client: TestClient) -> None:
+    check = client.post("/v1/python/check", json={"source": "answer = 42"})
     test = client.post(
         "/v1/python/test",
         json={"source": "def answer(): return 42", "test_code": "def test_answer(): assert True"},
-        headers=headers,
     )
 
     assert check.status_code == 200
@@ -67,7 +59,6 @@ def test_combined_code_and_test_input_limit_is_enforced(client: TestClient) -> N
     response = client.post(
         "/v1/python/test",
         json={"source": "x" * (256 * 1024), "test_code": "def test_x(): pass"},
-        headers={"Authorization": "Bearer test-api-key"},
     )
 
     assert response.status_code == 422
@@ -92,7 +83,6 @@ def test_runner_unavailable_is_returned_as_503(client: TestClient) -> None:
     response = client.post(
         "/v1/python/check",
         json={"source": "answer = 42"},
-        headers={"Authorization": "Bearer test-api-key"},
     )
 
     assert response.status_code == 503
@@ -105,4 +95,6 @@ def test_openapi_is_fixed_to_openapi_30_and_defines_two_agent_tools(client: Test
     assert document["openapi"] == "3.0.3"
     assert document["paths"]["/v1/python/check"]["post"]["operationId"] == "python_static_check"
     assert document["paths"]["/v1/python/test"]["post"]["operationId"] == "python_assertion_test"
-    assert document["components"]["securitySchemes"]["BearerAuth"]["scheme"] == "bearer"
+    assert "security" not in document
+    assert "securitySchemes" not in document["components"]
+    assert document["servers"][0]["url"] == "http://tools.example:8000"

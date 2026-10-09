@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import hmac
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 
 from app.config import Settings
 from app.models import CheckResponse, CodeRequest, TestRequest, TestResponse
@@ -17,7 +15,6 @@ from app.runner_client import RunnerClient, RunnerOverloaded, RunnerUnavailable
 from shared.request_limiter import RequestBodyLimitMiddleware
 
 OPENAPI_PATH = Path(__file__).resolve().parent.parent / "openapi.json"
-bearer_auth = HTTPBearer(auto_error=False, scheme_name="BearerAuth")
 
 
 @asynccontextmanager
@@ -46,37 +43,13 @@ def _openapi_schema() -> dict[str, Any]:
 def custom_openapi() -> dict[str, Any]:
     if app.openapi_schema is None:
         app.openapi_schema = _openapi_schema()
+        settings: Settings | None = getattr(app.state, "settings", None)
+        if settings is not None:
+            app.openapi_schema["servers"] = [{"url": settings.api_public_url}]
     return app.openapi_schema
 
 
 app.openapi = custom_openapi  # type: ignore[method-assign]
-
-
-async def require_api_key(
-    request: Request,
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None,
-        Security(bearer_auth),
-    ],
-) -> None:
-    settings: Settings = request.app.state.settings
-    if not settings.api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="API_KEY is not configured",
-        )
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="A Bearer API key is required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not hmac.compare_digest(credentials.credentials, settings.api_key):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="The API key is invalid",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
 
 def get_runner_client(request: Request) -> RunnerClient:
@@ -103,7 +76,6 @@ async def healthz() -> dict[str, str]:
 @app.post(
     "/v1/python/check",
     response_model=CheckResponse,
-    dependencies=[Depends(require_api_key)],
 )
 async def check_python_code(
     body: CodeRequest,
@@ -119,7 +91,6 @@ async def check_python_code(
 @app.post(
     "/v1/python/test",
     response_model=TestResponse,
-    dependencies=[Depends(require_api_key)],
 )
 async def test_python_code(
     body: TestRequest,

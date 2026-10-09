@@ -25,6 +25,7 @@ def execute(
         cwd=cwd,
         env={
             "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "PYTHONPATH": "/opt/dify_validator",
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONNOUSERSITE": "1",
             "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",

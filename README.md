@@ -70,6 +70,8 @@ API 没有外部认证，任何能访问发布端口的客户端都可以请求�
 
 每次调用创建并清理一个容器。容器禁网、以 UID 10001 运行、根文件系统只读，仅有 16 MiB 临时文件系统；CPU 上限为 1 核、内存/交换内存上限 512 MiB、进程上限 64、调用超时 30 秒、并发执行默认 2 个。沙箱镜像预装 Python 3.12、numpy、pandas、matplotlib、pytest 和 Ruff，运行时不安装依赖。
 
+沙箱镜像还包含 `价格接口/external_head.py`、`external_baseid.py` 和模拟 `PyEngine`，可用于解析策略接口并验证策略逻辑。模拟引擎只记录 `sendMsg` 消息，不连接真实交易客户端；测试通过不代表真实宿主集成通过。
+
 Runner 使用 Docker Engine 创建沙箱容器，因此仍需妥善保护 Runner 和 Docker socket。不要把 Docker socket 挂载给 Dify 或 API 容器。
 
 ## 本地开发与验证

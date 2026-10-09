@@ -30,6 +30,47 @@ def test_real_sandbox_checks_and_executes_with_network_disabled() -> None:
 
     try:
         check = executor.check("raise RuntimeError('static checks must not execute source')\n")
+        interface_check = executor.check(
+            "from external_head import RHTemplate, VtTickData\n"
+            "class Strategy(RHTemplate):\n"
+            "    def onTick(self, tick: VtTickData):\n"
+            "        super().onTick(tick)\n"
+        )
+        mocked_engine_test = executor.test(
+            "from external_head import RHTemplate, VtTickData\n\n"
+            "class Strategy(RHTemplate):\n"
+            "    paramMap = {}\n    varMap = {}\n\n"
+            "    def __init__(self, pid):\n"
+            "        self.npid = pid\n"
+            "        self.symbolList = ['y2701']\n"
+            "        self.exchangeList = ['DCE']\n"
+            "        super().__init__()\n\n"
+            "    def onTick(self, tick: VtTickData):\n"
+            "        super().onTick(tick)\n"
+            "        if tick.vtSymbol == 'y2701' and tick.lastPrice > 8900:\n"
+            "            self.output('threshold crossed')\n"
+            "            self.putEvent('y2701 above threshold', 'warning')\n",
+            "import json\n"
+            "from solution import Strategy\n"
+            "from external_head import VtTickData\n"
+            "from external_baseid import PyToSpiLog, PyToSpiNotification, "
+            "PythonGoSubscribeInstrument\n\n"
+            "def test_strategy_uses_host_api_with_recording_engine():\n"
+            "    strategy = Strategy(9)\n"
+            "    strategy.onStart()\n"
+            "    tick = VtTickData()\n"
+            "    tick.vtSymbol = 'y2701'\n"
+            "    tick.lastPrice = 8901\n"
+            "    strategy.onTick(tick)\n"
+            "    messages = [json.loads(raw) for raw, _ in "
+            "strategy.clientEngine.sent_messages]\n"
+            "    assert any(m['MsgType'] == PythonGoSubscribeInstrument for m in messages)\n"
+            "    assert any(m['MsgType'] == PyToSpiLog and "
+            "m.get('Msg') == 'threshold crossed' for m in messages)\n"
+            "    assert any(m['MsgType'] == PyToSpiNotification and "
+            "m['message'] == 'y2701 above threshold' and "
+            "m['level'] == 'warning' for m in messages)\n",
+        )
         syntax_error = executor.check("def broken(:\n    pass\n")
         lint_error = executor.check("answer = undefined_name\n")
         missing_import = executor.check("import definitely_missing_validator_package\n")
@@ -60,6 +101,10 @@ def test_real_sandbox_checks_and_executes_with_network_disabled() -> None:
         )
 
         assert check["syntax_valid"] is True
+        assert interface_check["status"] == "passed"
+        assert "external_head" in interface_check["checked_imports"]
+        assert mocked_engine_test["status"] == "passed"
+        assert mocked_engine_test["passed"] >= 1
         assert syntax_error["status"] == "failed"
         assert any(item["source"] == "syntax" for item in syntax_error["diagnostics"])
         assert lint_error["status"] == "failed"

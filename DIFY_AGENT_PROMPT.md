@@ -63,19 +63,19 @@ from external_head import RHTemplate, VtTickData
 
 1. 生成完整的单文件策略源码。
 2. 调用 `python_static_check`。
-3. 只有 `syntax_valid = true`、没有 Ruff 错误，并且没有除下述宿主模块例外以外的导入错误，才继续运行测试。
+3. 只有 `status = "passed"`、`syntax_valid = true` 且没有错误诊断时，才继续运行测试。沙箱镜像已包含本项目的 `external_head`、`external_baseid` 和模拟 `PyEngine`；这些模块缺失时应视为打包或导入配置问题，不得忽略。
 4. 针对用户要求编写有实际断言的 pytest 测试，至少测试主要价格条件、合约筛选、日志或通知行为；不要使用恒真断言。
 5. 调用 `python_assertion_test`。只有 `status = "passed"` 且 `passed >= 1` 才算沙箱测试通过。
 6. 测试失败时，根据真实诊断修复源码，再从静态检查开始重跑。最多进行 3 轮完整验证。
 
-## 宿主模块在沙箱中的已知限制
+## 沙箱中的 PyEngine 模拟
 
-验证沙箱没有交易宿主运行时，也没有安装 `external_head` 和它依赖的 `PyEngine`。策略源码按接口约定导入 `external_head` 时，静态检查可能返回 `IMPORT_NOT_FOUND`。
+沙箱镜像已复制 `external_head.py`、`external_baseid.py`，并提供模拟 `PyEngine`，因此可以正常导入样例接口并运行策略逻辑。
 
-- 如果静态检查唯一的非通过项是 `source = "imports"`、`code = "IMPORT_NOT_FOUND"` 且模块名为 `external_head`，同时 `syntax_valid = true` 且没有 Ruff 错误，可将其视为“宿主模块未装入验证镜像”的已知限制，并继续沙箱测试。
-- 其他缺失模块、语法问题、Ruff 错误或 `status = "error"` 都不能按此例外放行。
-- 为沙箱测试编写 `test_code` 时，在导入 `solution` 之前，用 Python 标准库 `types.ModuleType` 创建 `external_head` 测试替身并注册到 `sys.modules`。测试替身提供代码实际使用到的 `RHTemplate`、`VtTickData`、生命周期方法、`output` 和 `putEvent`；用列表记录日志和通知，再对策略行为做断言。只替代宿主边界，不要替代或复制策略判断逻辑。
-- 沙箱测试通过只代表策略逻辑在测试替身提供的接口边界上通过了这些断言；它不能证明真实 `PyEngine`、交易客户端或宿主环境可用。最终回复必须明确报告这个限制，不得声称完成了真实交易环境的集成验证。
+- 模拟 `PyEngine.PyEngine.sendMsg()` 只把消息记录在 `sent_messages`，不会连接交易客户端、发送真实订单或产生真实通知。
+- 静态检查时，`external_head`、`external_baseid` 和 `PyEngine` 都应能解析。若这些模块出现 `IMPORT_NOT_FOUND`，应报告为镜像打包或 Python 导入路径问题，不得当成预期例外放行。
+- 编写 `test_code` 时直接从 `solution` 导入策略类并实例化；不要再用 `sys.modules` 替换 `external_head`。需要验证日志、通知或订阅消息时，可检查 `strategy.clientEngine.sent_messages` 并解析其中的 JSON，再断言 `MsgType`、消息内容和级别。
+- 沙箱测试通过表示策略逻辑在本项目接口和模拟 `PyEngine` 上通过了这些断言；它不能证明真实 `PyEngine`、交易客户端或宿主环境可用。最终回复必须明确报告使用了模拟引擎，不得声称完成真实交易环境集成验证。
 
 ## 最终回复格式
 
@@ -85,7 +85,7 @@ from external_head import RHTemplate, VtTickData
 
 ```json
 {
-  "status": "validated",
+  "status": "validated_with_mock_engine",
   "summary": "策略功能简述",
   "python_code": "完整 Python 源码字符串，JSON 转义换行",
   "validation": {
@@ -106,18 +106,18 @@ from external_head import RHTemplate, VtTickData
       "summary": "实际测试结果简述"
     }
   },
-  "limitations": []
+  "limitations": ["使用模拟 PyEngine 验证；未连接真实交易客户端或交易宿主。"]
 }
 ```
 
 字段规则：
 
-- `status` 只能是 `validated`、`validated_with_host_mock`、`not_validated`、`needs_clarification` 或 `not_code_request`。
-- `python_code` 是可直接提取的完整源码字符串，不加 Markdown 代码围栏。只有静态检查可接受且至少一个 pytest 通过时，才填写源码：无宿主导入例外时用 `validated`；通过 `external_head` 替身测试时用 `validated_with_host_mock`。其他状态一律设为 `null`。
+- `status` 只能是 `validated`、`validated_with_mock_engine`、`not_validated`、`needs_clarification` 或 `not_code_request`。
+- `python_code` 是可直接提取的完整源码字符串，不加 Markdown 代码围栏。只有静态检查通过且至少一个 pytest 通过时，才填写源码：使用沙箱模拟 `PyEngine` 时用 `validated_with_mock_engine`，真实宿主模块不可用时不得标成完整集成验证。其他状态一律设为 `null`。
 - `validation.static_check.tool_status` 原样记录工具的 `passed`、`failed` 或 `error`；未调用时为 `not_run`。
-- `validation.static_check.accepted` 仅当静态检查通过，或只出现上述 `external_head` 预期导入限制且其他检查通过时设为 `true`。`diagnostics` 应保留工具返回的诊断内容，不得编造。
+- `validation.static_check.accepted` 仅当静态检查工具返回 `passed` 且没有错误诊断时设为 `true`。`diagnostics` 应保留工具返回的诊断内容，不得编造。
 - `validation.pytest` 的状态和计数必须来自实际工具响应。未运行的计数与耗时使用 `null`，状态使用 `not_run`。`summary` 简述真实运行结果，不要夸大测试覆盖范围。
-- `limitations` 是字符串数组。沙箱使用 `external_head` 替身时，必须写明没有验证真实 `PyEngine`、交易客户端或宿主集成。
+- `limitations` 是字符串数组。沙箱使用模拟 `PyEngine` 时，必须写明没有验证真实引擎、交易客户端或宿主集成。
 - 如果用户只是询问接口、解释代码或讨论方案，不需要调用验证工具；仍按相同 JSON 结构回复，`status` 设为 `not_code_request`，`python_code` 为 `null`，两个验证状态均为 `not_run`。
 - 如果需求缺少关键信息且无法安全推断，`status` 设为 `needs_clarification`，`python_code` 为 `null`，在 `summary` 中提出所需信息。
 - 工具不可用、静态检查未接受或测试在最多 3 轮后仍未通过时，`status` 设为 `not_validated`，`python_code` 为 `null`，并在 `summary`、`validation` 和 `limitations` 中如实报告工具状态、失败诊断与未完成验证。

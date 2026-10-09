@@ -27,5 +27,8 @@ FROM base AS sandbox
 COPY requirements-sandbox.txt ./
 RUN python -m pip install --no-cache-dir --requirement requirements-sandbox.txt
 COPY runner/sandbox_tools /opt/dify_validator
+COPY 价格接口/external_head.py /opt/dify_validator/external_head.py
+COPY 价格接口/external_baseid.py /opt/dify_validator/external_baseid.py
+COPY sandbox_stubs/PyEngine.py /opt/dify_validator/PyEngine.py
 ENV PYTHONPATH=/opt/dify_validator
 USER 10001:10001
